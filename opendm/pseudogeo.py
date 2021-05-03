@@ -1,6 +1,6 @@
-import osr
-import gdal
-from gdalconst import GA_Update
+from osgeo import osr
+from osgeo import gdal
+from osgeo.gdalconst import GA_Update
 from opendm import io
 from opendm import log
 
@@ -20,6 +20,7 @@ def add_pseudo_georeferencing(geotiff):
 
         dst_ds = gdal.Open(geotiff, GA_Update)
         srs = osr.SpatialReference()
+        srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
         srs.ImportFromProj4(get_pseudogeo_utm())
         dst_ds.SetProjection( srs.ExportToWkt() )
         dst_ds.SetGeoTransform( [ 0.0, get_pseudogeo_scale(), 0.0, 0.0, 0.0, -get_pseudogeo_scale() ] )

@@ -4,7 +4,7 @@ from opendm.dem import commands
 from opendm import system
 from opendm import log
 from opendm import context
-from scipy import signal, ndimage
+from scipy import signal
 import numpy as np
 
 def create_25dmesh(inPointCloud, outMesh, dsm_radius=0.07, dsm_resolution=0.05, depth=8, samples=1, maxVertexCount=100000, verbose=False, available_cores=None, method='gridded', smooth_dsm=True):
@@ -26,7 +26,7 @@ def create_25dmesh(inPointCloud, outMesh, dsm_radius=0.07, dsm_resolution=0.05, 
             inPointCloud,
             'mesh_dsm',
             output_type='max',
-            radiuses=map(str, radius_steps),
+            radiuses=list(map(str, radius_steps)),
             gapfill=True,
             outdir=tmp_directory,
             resolution=dsm_resolution,
@@ -36,7 +36,7 @@ def create_25dmesh(inPointCloud, outMesh, dsm_radius=0.07, dsm_resolution=0.05, 
         )
 
     if method == 'gridded':
-        mesh = dem_to_mesh_gridded(os.path.join(tmp_directory, 'mesh_dsm.tif'), outMesh, maxVertexCount, verbose)
+        mesh = dem_to_mesh_gridded(os.path.join(tmp_directory, 'mesh_dsm.tif'), outMesh, maxVertexCount, verbose, maxConcurrency=max(1, available_cores))
     elif method == 'poisson':
         dsm_points = dem_to_points(os.path.join(tmp_directory, 'mesh_dsm.tif'), os.path.join(tmp_directory, 'dsm_points.ply'), verbose)
         mesh = screened_poisson_reconstruction(dsm_points, outMesh, depth=depth, 
@@ -74,7 +74,7 @@ def dem_to_points(inGeotiff, outPointCloud, verbose=False):
     return outPointCloud
 
 
-def dem_to_mesh_gridded(inGeotiff, outMesh, maxVertexCount, verbose=False):
+def dem_to_mesh_gridded(inGeotiff, outMesh, maxVertexCount, verbose=False, maxConcurrency=1):
     log.ODM_INFO('Creating mesh from DSM: %s' % inGeotiff)
 
     mesh_path, mesh_filename = os.path.split(outMesh)
@@ -87,34 +87,48 @@ def dem_to_mesh_gridded(inGeotiff, outMesh, maxVertexCount, verbose=False):
 
     outMeshDirty = os.path.join(mesh_path, "{}.dirty{}".format(basename, ext))
 
-    kwargs = {
-        'bin': context.dem2mesh_path,
-        'outfile': outMeshDirty,
-        'infile': inGeotiff,
-        'maxVertexCount': maxVertexCount,
-        'verbose': '-verbose' if verbose else ''
-    }
+    # This should work without issues most of the times, 
+    # but just in case we lower maxConcurrency if it fails.
+    while True:
+        try:
+            kwargs = {
+                'bin': context.dem2mesh_path,
+                'outfile': outMeshDirty,
+                'infile': inGeotiff,
+                'maxVertexCount': maxVertexCount,
+                'maxConcurrency': maxConcurrency,
+                'verbose': '-verbose' if verbose else ''
+            }
+            system.run('{bin} -inputFile {infile} '
+                '-outputFile {outfile} '
+                '-maxTileLength 2000 '
+                '-maxVertexCount {maxVertexCount} '
+                '-maxConcurrency {maxConcurrency} '
+                ' {verbose} '.format(**kwargs))
+            break
+        except Exception as e:
+            maxConcurrency = math.floor(maxConcurrency / 2)
+            if maxConcurrency >= 1:
+                log.ODM_WARNING("dem2mesh failed, retrying with lower concurrency (%s) in case this is a memory issue" % maxConcurrency)
+            else:
+                raise e
 
-    system.run('{bin} -inputFile {infile} '
-         '-outputFile {outfile} '
-         '-maxTileLength 4000 '
-         '-maxVertexCount {maxVertexCount} '
-         ' {verbose} '.format(**kwargs))
 
     # Cleanup and reduce vertex count if necessary 
     # (as dem2mesh cannot guarantee that we'll have the target vertex count)
     cleanupArgs = {
-        'bin': context.odm_modules_path,
+        'reconstructmesh': context.omvs_reconstructmesh_path,
         'outfile': outMesh,
         'infile': outMeshDirty,
-        'max_vertex': maxVertexCount,
+        'max_faces': maxVertexCount * 2,
         'verbose': '-verbose' if verbose else ''
     }
 
-    system.run('{bin}/odm_cleanmesh -inputFile {infile} '
-         '-outputFile {outfile} '
-         '-removeIslands '
-         '-decimateMesh {max_vertex} {verbose} '.format(**cleanupArgs))
+    system.run('{reconstructmesh} -i "{infile}" '
+         '-o "{outfile}" '
+         '--remove-spikes 0 --remove-spurious 0 --smooth 0 '
+         '--target-face-num {max_faces} '
+         '{verbose} '.format(**cleanupArgs))
 
     # Delete intermediate results
     os.remove(outMeshDirty)
@@ -157,17 +171,18 @@ def screened_poisson_reconstruction(inPointCloud, outMesh, depth = 8, samples = 
 
     # Cleanup and reduce vertex count if necessary
     cleanupArgs = {
-        'bin': context.odm_modules_path,
+        'reconstructmesh': context.omvs_reconstructmesh_path,
         'outfile': outMesh,
         'infile': outMeshDirty,
-        'max_vertex': maxVertexCount,
+        'max_faces': maxVertexCount * 2,
         'verbose': '-verbose' if verbose else ''
     }
 
-    system.run('{bin}/odm_cleanmesh -inputFile {infile} '
-         '-outputFile {outfile} '
-         '-removeIslands '
-         '-decimateMesh {max_vertex} {verbose} '.format(**cleanupArgs))
+    system.run('{reconstructmesh} -i "{infile}" '
+         '-o "{outfile}" '
+         '--remove-spikes 0 --remove-spurious 0 --smooth 0 '
+         '--target-face-num {max_faces} '
+         '{verbose} '.format(**cleanupArgs))
 
     # Delete intermediate results
     os.remove(outMeshDirty)

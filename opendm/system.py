@@ -10,6 +10,10 @@ import signal
 from opendm import context
 from opendm import log
 
+class SubprocessException(Exception):
+    def __init__(self, msg, errorCode):
+        super().__init__(msg)
+        self.errorCode = errorCode
 
 def get_ccd_widths():
     """Return the CCD Width of the camera listed in the JSON defs file."""
@@ -53,15 +57,17 @@ def sighandler(signum, frame):
 signal.signal(signal.SIGINT, sighandler)
 signal.signal(signal.SIGTERM, sighandler)
 
-def run(cmd, env_paths=[context.superbuild_bin_path], env_vars={}):
+def run(cmd, env_paths=[context.superbuild_bin_path], env_vars={}, packages_paths=context.python_packages_paths):
     """Run a system command"""
     global running_subprocesses
 
     log.ODM_INFO('running %s' % cmd)
-
     env = os.environ.copy()
     if len(env_paths) > 0:
         env["PATH"] = env["PATH"] + ":" + ":".join(env_paths)
+    
+    if len(packages_paths) > 0:
+        env["PYTHONPATH"] = env.get("PYTHONPATH", "") + ":" + ":".join(packages_paths) 
     
     for k in env_vars:
         env[k] = str(env_vars[k])
@@ -71,9 +77,9 @@ def run(cmd, env_paths=[context.superbuild_bin_path], env_vars={}):
     retcode = p.wait()
     running_subprocesses.remove(p)
     if retcode < 0:
-        raise Exception("Child was terminated by signal {}".format(-retcode))
+        raise SubprocessException("Child was terminated by signal {}".format(-retcode), -retcode)
     elif retcode > 0:
-        raise Exception("Child returned {}".format(retcode))
+        raise SubprocessException("Child returned {}".format(retcode), retcode)
 
 
 def now():

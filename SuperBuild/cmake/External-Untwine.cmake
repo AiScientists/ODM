@@ -1,22 +1,22 @@
-set(_proj_name opengv)
+set(_proj_name untwine)
 set(_SB_BINARY_DIR "${SB_BINARY_DIR}/${_proj_name}")
 
 ExternalProject_Add(${_proj_name}
+  DEPENDS           pdal
   PREFIX            ${_SB_BINARY_DIR}
   TMP_DIR           ${_SB_BINARY_DIR}/tmp
   STAMP_DIR         ${_SB_BINARY_DIR}/stamp
   #--Download step--------------
   DOWNLOAD_DIR      ${SB_DOWNLOAD_DIR}
-  GIT_REPOSITORY    https://github.com/paulinus/opengv/
-  GIT_TAG           306a54e6c6b94e2048f820cdf77ef5281d4b48ad
+  GIT_REPOSITORY    https://github.com/pierotofy/untwine/
+  GIT_TAG           insttgt
   #--Update/Patch step----------
-  UPDATE_COMMAND    git submodule update --init --recursive
+  UPDATE_COMMAND    ""
   #--Configure step-------------
   SOURCE_DIR        ${SB_SOURCE_DIR}/${_proj_name}
   CMAKE_ARGS
-    -DBUILD_TESTS=OFF 
-    -DBUILD_PYTHON=ON
-    -DPYBIND11_PYTHON_VERSION=2.7
+    -DPDAL_DIR=${SB_INSTALL_DIR}/lib/cmake/PDAL
+	-DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX:PATH=${SB_INSTALL_DIR}
   #--Build step-----------------
   BINARY_DIR        ${_SB_BINARY_DIR}
@@ -27,4 +27,3 @@ ExternalProject_Add(${_proj_name}
   LOG_CONFIGURE     OFF
   LOG_BUILD         OFF
 )
-
