@@ -3,7 +3,7 @@ from opendm import log
 from opendm.pseudogeo import get_pseudogeo_utm, get_pseudogeo_scale
 from opendm.location import transformer
 from pyproj import CRS
-import gdal
+from osgeo import gdal
 import numpy as np
 import cv2
 
@@ -23,16 +23,13 @@ def get_origin(shot):
     """The origin of the pose in world coordinates."""
     return -get_rotation_matrix(np.array(shot['rotation'])).T.dot(np.array(shot['translation']))
 
-def get_geojson_shots_from_opensfm(reconstruction_file, geocoords_transformation_file=None, utm_srs=None, pseudo_geotiff=None):
+def get_geojson_shots_from_opensfm(reconstruction_file, utm_srs=None, utm_offset=None, pseudo_geotiff=None):
     """
     Extract shots from OpenSfM's reconstruction.json
     """
+    pseudo_geocoords = None
 
-    # Read transform (if available)
-    if geocoords_transformation_file is not None and utm_srs is not None and os.path.exists(geocoords_transformation_file):
-        geocoords = np.loadtxt(geocoords_transformation_file, usecols=range(4))
-        pseudo = False
-    elif pseudo_geotiff is not None and os.path.exists(pseudo_geotiff):
+    if pseudo_geotiff is not None and os.path.exists(pseudo_geotiff):
         # pseudogeo transform
         utm_srs = get_pseudogeo_utm()
 
@@ -43,67 +40,74 @@ def get_geojson_shots_from_opensfm(reconstruction_file, geocoords_transformation
         lrx = ulx + (raster.RasterXSize * xres)
         lry = uly + (raster.RasterYSize * yres)
 
-        geocoords = np.array([[1.0 / get_pseudogeo_scale() ** 2, 0, 0, ulx + lrx / 2.0],
+        pseudo_geocoords = np.array([[1.0 / get_pseudogeo_scale() ** 2, 0, 0, ulx + lrx / 2.0],
                               [0, 1.0 / get_pseudogeo_scale() ** 2, 0, uly + lry / 2.0],
                               [0, 0, 1, 0],
                               [0, 0, 0, 1]])
         raster = None
         pseudo = True
-    else:
-        # Can't deal with this
-        return
 
     crstrans = transformer(CRS.from_proj4(utm_srs), CRS.from_epsg("4326"))
 
     if os.path.exists(reconstruction_file):
         with open(reconstruction_file, 'r') as fin:
             reconstructions = json.loads(fin.read())
-            
+
             feats = []
-            cameras = {}
             added_shots = {}
             for recon in reconstructions:
-                if 'cameras' in recon:
-                    cameras = recon['cameras']
-                
-            for filename in recon.get('shots', {}):
-                shot = recon['shots'][filename]
-                cam = shot.get('camera')
-                if (not cam in cameras) or (filename in added_shots):
-                    continue
-                
-                cam = cameras[cam]
-                Rs, T = geocoords[:3, :3], geocoords[:3, 3]
-                Rs1 = np.linalg.inv(Rs)
-                origin = get_origin(shot)
+                cameras = recon.get('cameras', {})
 
-                # Translation
-                utm_coords = np.dot(Rs, origin) + T
-                trans_coords = crstrans.TransformPoint(utm_coords[0], utm_coords[1], utm_coords[2])
+                for filename in recon.get('shots', {}):
+                    shot = recon['shots'][filename]
+                    cam = shot.get('camera')
+                    if (not cam in cameras) or (filename in added_shots):
+                        continue
 
-                # Rotation
-                rotation_matrix = get_rotation_matrix(np.array(shot['rotation']))
-                rotation = matrix_to_rotation(np.dot(rotation_matrix, Rs1))
+                    cam = cameras[cam]
+                    if pseudo_geocoords is not None:
+                        Rs, T = pseudo_geocoords[:3, :3], pseudo_geocoords[:3, 3]
+                        Rs1 = np.linalg.inv(Rs)
+                        origin = get_origin(shot)
 
-                translation = origin if pseudo else utm_coords
+                        # Translation
+                        utm_coords = np.dot(Rs, origin) + T
+                        trans_coords = crstrans.TransformPoint(utm_coords[0], utm_coords[1], utm_coords[2])
 
-                feats.append({
-                    'type': 'Feature',
-                    'properties': {
-                        'filename': filename,
-                        'focal': cam.get('focal', cam.get('focal_x')), # Focal ratio = focal length (mm) / max(sensor_width, sensor_height) (mm)
-                        'width': cam.get('width', 0),
-                        'height': cam.get('height', 0),
-                        'translation': list(translation),
-                        'rotation': list(rotation)
-                    },
-                    'geometry':{
-                        'type': 'Point',
-                        'coordinates': list(trans_coords)
-                    }
-                })
+                        # Rotation
+                        rotation_matrix = get_rotation_matrix(np.array(shot['rotation']))
+                        rotation = matrix_to_rotation(np.dot(rotation_matrix, Rs1))
 
-                added_shots[filename] = True
+                        translation = origin
+                    else:
+                        rotation = shot['rotation']
+
+                        # Just add UTM offset
+                        origin = get_origin(shot)
+
+                        utm_coords = [origin[0] + utm_offset[0],
+                                       origin[1] + utm_offset[1],
+                                       origin[2]]
+                        translation = utm_coords
+                        trans_coords = crstrans.TransformPoint(utm_coords[0], utm_coords[1], utm_coords[2])
+
+                    feats.append({
+                        'type': 'Feature',
+                        'properties': {
+                            'filename': filename,
+                            'focal': cam.get('focal', cam.get('focal_x')), # Focal ratio = focal length (mm) / max(sensor_width, sensor_height) (mm)
+                            'width': cam.get('width', 0),
+                            'height': cam.get('height', 0),
+                            'translation': list(translation),
+                            'rotation': list(rotation)
+                        },
+                        'geometry':{
+                            'type': 'Point',
+                            'coordinates': list(trans_coords)
+                        }
+                    })
+
+                    added_shots[filename] = True
 
         return {
             'type': 'FeatureCollection',
