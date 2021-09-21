@@ -6,14 +6,14 @@ if sys.version_info.major < 3:
     print("Ups! ODM needs to run with Python 3. It seems you launched it with Python 2. Try using: python3 run.py ... ")
     sys.exit(1)
 
+import os
 from opendm import log
 from opendm import config
 from opendm import system
 from opendm import io
 from opendm.progress import progressbc
-
-import os
-from pipes import quote
+from opendm.utils import double_quote, get_processing_results_paths
+from opendm.loghelpers import args_to_dict
 
 from stages.odm_app import ODMApp
 
@@ -23,18 +23,10 @@ if __name__ == '__main__':
     log.ODM_INFO('Initializing ODM - %s' % system.now())
 
     # Print args
-    args_dict = vars(args)
+    args_dict = args_to_dict(args)
     log.ODM_INFO('==============')
-    for k in sorted(args_dict.keys()):
-        # Skip _is_set keys
-        if k.endswith("_is_set"):
-            continue
-
-        # Don't leak token
-        if k == 'sm_cluster' and args_dict[k] is not None:
-            log.ODM_INFO('%s: True' % k)
-        else:
-            log.ODM_INFO('%s: %s' % (k, args_dict[k]))
+    for k in args_dict.keys():
+        log.ODM_INFO('%s: %s' % (k, args_dict[k]))
     log.ODM_INFO('==============')
 
     progressbc.set_project_name(args.name)
@@ -49,19 +41,12 @@ if __name__ == '__main__':
     if args.rerun_all:
         log.ODM_INFO("Rerun all -- Removing old data")
         os.system("rm -rf " + 
-                    " ".join([
-                        quote(os.path.join(args.project_path, "odm_georeferencing")),
-                        quote(os.path.join(args.project_path, "odm_meshing")),
-                        quote(os.path.join(args.project_path, "odm_orthophoto")),
-                        quote(os.path.join(args.project_path, "odm_dem")),
-                        quote(os.path.join(args.project_path, "odm_report")),
-                        quote(os.path.join(args.project_path, "odm_texturing")),
-                        quote(os.path.join(args.project_path, "opensfm")),
-                        quote(os.path.join(args.project_path, "odm_filterpoints")),
-                        quote(os.path.join(args.project_path, "odm_texturing_25d")),
-                        quote(os.path.join(args.project_path, "openmvs")),
-                        quote(os.path.join(args.project_path, "entwine_pointcloud")),
-                        quote(os.path.join(args.project_path, "submodels")),
+                    " ".join([double_quote(os.path.join(args.project_path, p)) for p in get_processing_results_paths()] + [
+                        double_quote(os.path.join(args.project_path, "odm_meshing")),
+                        double_quote(os.path.join(args.project_path, "opensfm")),
+                        double_quote(os.path.join(args.project_path, "odm_texturing_25d")),
+                        double_quote(os.path.join(args.project_path, "odm_filterpoints")),
+                        double_quote(os.path.join(args.project_path, "submodels")),
                     ]))
 
     app = ODMApp(args)

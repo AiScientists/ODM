@@ -12,6 +12,11 @@ externalproject_add(vcg
     INSTALL_COMMAND ""
 )
 
+SET(ARM64_CMAKE_ARGS "")
+if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64" )
+  SET(ARM64_CMAKE_ARGS -DOpenMVS_USE_SSE=OFF)
+endif()
+
 ExternalProject_Add(${_proj_name}
   DEPENDS           ceres opencv vcg
   PREFIX            ${_SB_BINARY_DIR}
@@ -20,7 +25,7 @@ ExternalProject_Add(${_proj_name}
   #--Download step--------------
   DOWNLOAD_DIR      ${SB_DOWNLOAD_DIR}
   GIT_REPOSITORY    https://github.com/OpenDroneMap/openMVS
-  GIT_TAG           2412
+  GIT_TAG           256
   #--Update/Patch step----------
   UPDATE_COMMAND    ""
   #--Configure step-------------
@@ -30,6 +35,8 @@ ExternalProject_Add(${_proj_name}
     -DVCG_ROOT=${SB_SOURCE_DIR}/vcg
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${SB_INSTALL_DIR}
+    ${WIN32_CMAKE_ARGS}
+    ${ARM64_CMAKE_ARGS}
   #--Build step-----------------
   BINARY_DIR        ${_SB_BINARY_DIR}
   #--Install step---------------
