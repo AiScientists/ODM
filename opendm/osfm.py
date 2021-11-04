@@ -23,7 +23,7 @@ from opensfm import report
 from opendm.multispectral import get_photos_by_band
 from opendm.gpu import has_gpus
 from opensfm import multiview
-from opensfm.actions.export_geocoords import _get_transformation
+from opensfm.actions.export_geocoords import _transform
 
 class OSFMContext:
     def __init__(self, opensfm_project_path):
@@ -458,47 +458,33 @@ class OSFMContext:
         """
         Load ground control point information.
         """
-        ds = DataSet(self.opensfm_project_path)
-        gcps = ds.load_ground_control_points()
-        if not gcps:
+        gcp_stats_file = self.path("stats", "ground_control_points.json")
+
+        if not io.file_exists(gcp_stats_file):
             return []
         
-        reconstructions = ds.load_reconstruction()
-        reference = ds.load_reference()
+        gcps_stats = {}
+        try:
+            with open(gcp_stats_file) as f:
+                gcps_stats = json.loads(f.read())
+        except:
+            log.ODM_INFO("Cannot parse %s" % gcp_stats_file)
 
+        if not gcps_stats:
+            return []
+        
+        ds = DataSet(self.opensfm_project_path)
+        reference = ds.load_reference()
         projection = pyproj.Proj(proj4)
-        t = _get_transformation(reference, projection, (0, 0))
-        A, b = t[:3, :3], t[:3, 3]
 
         result = []
-
-        for gcp in gcps:
-            if not gcp.coordinates.has_value:
-                continue
-            triangulated = None
-
-            for rec in reconstructions:
-                triangulated = multiview.triangulate_gcp(gcp, rec.shots, 1.0, 0.1)
-                if triangulated is None:
-                    continue
-                else:
-                    break
-
-            if triangulated is None:
-                continue
-
-            triangulated_topocentric = np.dot(A.T, triangulated) 
-            
-            coordinates_topocentric = np.array(gcp.coordinates.value)
-            coordinates = np.dot(A, coordinates_topocentric) + b
-            triangulated = triangulated + b
-        
+        for gcp in gcps_stats:
+            geocoords = _transform(gcp['coordinates'], reference, projection)
             result.append({
-                'id': gcp.id,
-                'observations': [obs.shot_id for obs in gcp.observations],
-                'triangulated': triangulated,
-                'coordinates': coordinates,
-                'error': np.abs(triangulated_topocentric - coordinates_topocentric)
+                'id': gcp['id'],
+                'observations': gcp['observations'],
+                'coordinates': geocoords,
+                'error': gcp['error']
             })
 
         return result
@@ -524,10 +510,11 @@ def get_submodel_argv(args, submodels_path = None, submodel_name = None):
         tweaking --crop if necessary (DEM merging makes assumption about the area of DEMs and their euclidean maps that require cropping. If cropping is skipped, this leads to errors.)
         removing --gcp (the GCP path if specified is always "gcp_list.txt")
         reading the contents of --cameras
+        reading the contents of --boundary
     """
     assure_always = ['orthophoto_cutline', 'dem_euclidean_map', 'skip_3dmodel', 'skip_report']
     remove_always = ['split', 'split_overlap', 'rerun_from', 'rerun', 'gcp', 'end_with', 'sm_cluster', 'rerun_all', 'pc_csv', 'pc_las', 'pc_ept', 'tiles', 'copy-to', 'cog']
-    read_json_always = ['cameras']
+    read_json_always = ['cameras', 'boundary']
 
     argv = sys.argv
 
