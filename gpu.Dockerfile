@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.2.0-runtime-ubuntu20.04 AS builder
+FROM nvidia/cuda:11.2.0-devel-ubuntu20.04 AS builder
 
 # Env variables
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -22,6 +22,7 @@ RUN bash configure.sh clean
 ### Use a second image for the final asset to reduce the number and
 # size of the layers.
 FROM nvidia/cuda:11.2.0-runtime-ubuntu20.04
+#FROM nvidia/cuda:11.2.0-devel-ubuntu20.04
 
 # Env variables
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -41,9 +42,11 @@ RUN apt update && apt install -y nvidia-opencl-icd-340 intel-opencl-icd
 
 # Install shared libraries that we depend on via APT, but *not*
 # the -dev packages to save space!
+# Also run a smoke test
 RUN bash configure.sh installruntimedepsonly \
   && apt-get clean \
-  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
+  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+  && bash run.sh --help
 
 # Entry point
 ENTRYPOINT ["python3", "/code/run.py"]
