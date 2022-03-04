@@ -122,7 +122,7 @@ def config(argv=None, parser=None):
     parser.add_argument('--min-num-features',
                         metavar='<integer>',
                         action=StoreValue,
-                        default=8000,
+                        default=10000,
                         type=int,
                         help=('Minimum number of features to extract per image. '
                               'More features can be useful for finding more matches between images, '
@@ -218,8 +218,8 @@ def config(argv=None, parser=None):
                         action=StoreValue,
                         type=float,
                         default=640,
-                        help=('Legacy option (use --pc-quality instead). Controls the density of the point cloud by setting the resolution of the depthmap images. Higher values take longer to compute '
-                              'but produce denser point clouds. '
+                        help=('Controls the density of the point cloud by setting the resolution of the depthmap images. Higher values take longer to compute '
+                              'but produce denser point clouds. Overrides the value calculated by --pc-quality.'
                               'Default: %(default)s'))
 
     parser.add_argument('--use-hybrid-bundle-adjustment',

@@ -20,6 +20,8 @@ def create_25dmesh(inPointCloud, outMesh, dsm_radius=0.07, dsm_resolution=0.05, 
     log.ODM_INFO('Created temporary directory: %s' % tmp_directory)
 
     radius_steps = [dsm_radius]
+    for _ in range(2):
+        radius_steps.append(radius_steps[-1] * 2) # 2 is arbitrary
 
     log.ODM_INFO('Creating DSM for 2.5D mesh')
 
@@ -105,6 +107,7 @@ def dem_to_mesh_gridded(inGeotiff, outMesh, maxVertexCount, verbose=False, maxCo
                 '-maxTileLength 2000 '
                 '-maxVertexCount {maxVertexCount} '
                 '-maxConcurrency {maxConcurrency} '
+                '-edgeSwapThreshold 0.15 '
                 ' {verbose} '.format(**kwargs))
             break
         except Exception as e:
