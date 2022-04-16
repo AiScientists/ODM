@@ -124,7 +124,7 @@ When you run ODM, if the GPU is recognized, in the first few lines of output you
 [INFO]    Using GPU for extracting SIFT features
 ```
 
-The SIFT GPU implementation is OpenCL-based, so should work with most graphics card (not just NVIDIA).
+The SIFT GPU implementation is CUDA-based, so should work with most NVIDIA graphics cards of the GTX 9xx Generation or newer.
 
 If you have an NVIDIA card, you can test that docker is recognizing the GPU by running:
 
@@ -287,3 +287,7 @@ ODM makes use of [several libraries](https://github.com/OpenDroneMap/ODM/blob/ma
 ## Citation
 
 > *OpenDroneMap Authors* ODM - A command line toolkit to generate maps, point clouds, 3D models and DEMs from drone, balloon or kite images. **OpenDroneMap/ODM GitHub Page** 2020; [https://github.com/OpenDroneMap/ODM](https://github.com/OpenDroneMap/ODM)
+
+## Trademark
+
+See [Trademark Guidelines](https://github.com/OpenDroneMap/documents/blob/master/TRADEMARK.md)

@@ -199,15 +199,22 @@ class OSFMContext:
                     log.ODM_WARNING("Cannot compute max image dimensions, going with defaults")
 
             # create config file for OpenSfM
+            if args.matcher_neighbors > 0:
+                matcher_graph_rounds = 0
+                matcher_neighbors = args.matcher_neighbors
+            else:
+                matcher_graph_rounds = 50
+                matcher_neighbors = 0
+
             config = [
                 "use_exif_size: no",
                 "flann_algorithm: KDTREE", # more stable, faster than KMEANS
                 "feature_process_size: %s" % feature_process_size,
                 "feature_min_frames: %s" % args.min_num_features,
                 "processes: %s" % args.max_concurrency,
-                "matching_gps_neighbors: %s" % args.matcher_neighbors,
+                "matching_gps_neighbors: %s" % matcher_neighbors,
                 "matching_gps_distance: 0",
-                "matching_graph_rounds: 50",
+                "matching_graph_rounds: %s" % matcher_graph_rounds,
                 "optimize_camera_parameters: %s" % ('no' if args.use_fixed_camera_params or args.cameras else 'yes'),
                 "reconstruction_algorithm: %s" % (args.sfm_algorithm),
                 "undistorted_image_format: tif",
@@ -257,6 +264,7 @@ class OSFMContext:
                 if has_popsift_and_can_handle_texsize(w, h) and feature_type == "SIFT":
                     log.ODM_INFO("Using GPU for extracting SIFT features")
                     feature_type = "SIFT_GPU"
+                    self.gpu_sift_feature_extraction = True
             
             config.append("feature_type: %s" % feature_type)
 
@@ -361,7 +369,18 @@ class OSFMContext:
         matches_dir = self.path("matches")
         
         if not io.dir_exists(features_dir) or rerun:
-            self.run('detect_features')
+            try:
+                self.run('detect_features')
+            except system.SubprocessException as e:
+                # Sometimes feature extraction by GPU can fail
+                # for various reasons, so before giving up
+                # we try to fallback to CPU
+                if hasattr(self, 'gpu_sift_feature_extraction'):
+                    log.ODM_WARNING("GPU SIFT extraction failed, maybe the graphics card is not supported? Attempting fallback to CPU")
+                    self.update_config({'feature_type': "SIFT"})
+                    self.run('detect_features')
+                else:
+                    raise e
         else:
             log.ODM_WARNING('Detect features already done: %s exists' % features_dir)
 

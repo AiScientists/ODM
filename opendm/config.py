@@ -157,12 +157,11 @@ def config(argv=None, parser=None):
                             '%(default)s'))
 
     parser.add_argument('--matcher-neighbors',
-                        metavar='<integer>',
+                        metavar='<positive integer>',
                         action=StoreValue,
-                        default=8,
+                        default=0,
                         type=int,
-                        help='Number of nearest images to pre-match based on GPS '
-                             'exif data. Set to 0 to skip pre-matching. Default: %(default)s')
+                        help='Perform image matching with the nearest images based on GPS exif data. Set to 0 to match by triangulation. Default: %(default)s')
 
     parser.add_argument('--use-fixed-camera-params',
                         action=StoreTrue,
@@ -359,6 +358,12 @@ def config(argv=None, parser=None):
                 nargs=0,
                 default=False,
                 help='Export the georeferenced point cloud in Entwine Point Tile (EPT) format. Default: %(default)s')
+
+    parser.add_argument('--pc-copc',
+                action=StoreTrue,
+                nargs=0,
+                default=False,
+                help='Save the georeferenced point cloud in Cloud Optimized Point Cloud (COPC) format. Default: %(default)s')
 
     parser.add_argument('--pc-filter',
                         metavar='<positive float>',
