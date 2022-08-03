@@ -52,7 +52,7 @@ class ODMSplitStage(types.ODM_Stage):
                 ]
 
                 octx.setup(args, tree.dataset_raw, reconstruction=reconstruction, append_config=config, rerun=self.rerun())
-                octx.photos_to_metadata(photos, self.rerun())
+                octx.photos_to_metadata(photos, args.rolling_shutter, args.rolling_shutter_readout, self.rerun())
 
                 self.update_progress(5)
 
@@ -103,16 +103,15 @@ class ODMSplitStage(types.ODM_Stage):
                 if local_workflow:
                     for sp in submodel_paths:
                         log.ODM_INFO("Reconstructing %s" % sp)
-                        OSFMContext(sp).reconstruct(self.rerun())
+                        local_sp_octx = OSFMContext(sp)
+                        local_sp_octx.create_tracks(self.rerun())
+                        local_sp_octx.reconstruct(args.rolling_shutter, self.rerun())
                 else:
-                    lre = LocalRemoteExecutor(args.sm_cluster, self.rerun())
+                    lre = LocalRemoteExecutor(args.sm_cluster, args.rolling_shutter, self.rerun())
                     lre.set_projects([os.path.abspath(os.path.join(p, "..")) for p in submodel_paths])
                     lre.run_reconstruction()
 
                 self.update_progress(50)
-
-                mds = metadataset.MetaDataSet(tree.opensfm)
-                submodel_paths = [os.path.abspath(p) for p in mds.get_submodel_paths()]
 
                 # Align
                 octx.align_reconstructions(self.rerun())
