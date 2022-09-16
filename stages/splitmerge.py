@@ -26,8 +26,19 @@ class ODMSplitStage(types.ODM_Stage):
         tree = outputs['tree']
         reconstruction = outputs['reconstruction']
         photos = reconstruction.photos
+        outputs['large'] = False
 
-        outputs['large'] = len(photos) > args.split
+        should_split = len(photos) > args.split
+
+        if should_split:
+            # check for availability of either image_groups.txt (split-merge) or geotagged photos
+            image_groups_file = os.path.join(args.project_path, "image_groups.txt")
+            if 'split_image_groups_is_set' in args:
+                image_groups_file = os.path.abspath(args.split_image_groups)
+            if io.file_exists(image_groups_file) or reconstruction.has_geotagged_photos():
+                outputs['large'] = True
+            else:
+                log.ODM_WARNING('Could not perform split-merge as GPS information in photos or image_groups.txt is missing.')
 
         if outputs['large']:
             # If we have a cluster address, we'll use a distributed workflow
