@@ -107,6 +107,8 @@ class ODM_Reconstruction(object):
             if gcp.exists():
                 if gcp.entries_count() == 0:
                     raise RuntimeError("This GCP file does not have any entries. Are the entries entered in the proper format?")
+                
+                gcp.check_entries()
 
                 # Convert GCP file to a UTM projection since the rest of the pipeline
                 # does not handle other SRS well.
@@ -362,8 +364,10 @@ class ODM_Stage:
         if outputs.get('tree') is None:
             raise Exception("Assert violation: tree variable is missing from outputs dictionary.")
 
-        if self.args.time:
+        try:
             system.benchmark(start_time, outputs['tree'].benchmarking, self.name)
+        except Exception as e:
+            log.ODM_WARNING("Cannot write benchmark file: %s" % str(e))
 
         log.ODM_INFO('Finished %s stage' % self.name)
         self.update_progress_end()
